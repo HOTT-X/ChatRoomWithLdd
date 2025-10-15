@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多用户聊天室</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 登录/注册界面 -->
+        <div id="authModal" class="modal">
+            <div class="modal-content">
+                <div class="auth-tabs">
+                    <button class="tab-button active" data-tab="login">登录</button>
+                    <button class="tab-button" data-tab="register">注册</button>
+                </div>
+
+                <!-- 登录表单 -->
+                <div id="loginForm" class="auth-form active">
+                    <h2>欢迎回来</h2>
+                    <form id="loginFormElement">
+                        <input type="text" id="loginUsername" placeholder="用户名" required>
+                        <input type="password" id="loginPassword" placeholder="密码" required>
+                        <button type="submit">登录</button>
+                    </form>
+                </div>
+
+                <!-- 注册表单 -->
+                <div id="registerForm" class="auth-form">
+                    <h2>创建账户</h2>
+                    <form id="registerFormElement">
+                        <input type="text" id="registerUsername" placeholder="用户名" required>
+                        <input type="text" id="registerNickname" placeholder="昵称" required>
+                        <input type="email" id="registerEmail" placeholder="邮箱（可选）">
+                        <input type="password" id="registerPassword" placeholder="密码" required>
+                        <input type="password" id="registerConfirmPassword" placeholder="确认密码" required>
+                        <button type="submit">注册</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 聊天室列表界面 -->
+        <div id="chatroomList" class="chatroom-list" style="display: none;">
+            <div class="header">
+                <h2>摸鱼聊天室</h2>
+                <div class="user-info">
+                    <div class="user-profile">
+                        <img id="userAvatar" src="" alt="用户头像" class="user-avatar">
+                        <span id="currentUser"></span>
+                    </div>
+                    <div class="user-actions">
+                        <button id="avatarSettingsBtn" class="avatar-settings-btn" title="设置头像">🖼️</button>
+                        <button id="logoutBtn" class="logout-btn">退出</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chatroom-actions">
+                <button id="createRoomBtn" class="create-room-btn">创建聊天室</button>
+                <div class="sort-controls">
+                    <select id="sortSelect" class="sort-select">
+                        <option value="last_reply">按最后回复时间</option>
+                        <option value="creation">按创建时间</option>
+                        <option value="name">按名称</option>
+                        <option value="online">按在线人数</option>
+                    </select>
+                    <button id="sortOrderBtn" class="sort-order-btn" title="切换排序顺序">↑</button>
+                </div>
+                <button id="refreshRoomsBtn" class="refresh-btn">
+                    <span class="refresh-icon">🔄</span>
+                    刷新
+                </button>
+            </div>
+
+            <div id="roomsContainer" class="rooms-container">
+                <!-- 聊天室列表将在这里动态生成 -->
+            </div>
+        </div>
+
+        <!-- 聊天界面 -->
+        <div id="chatContainer" class="chat-container" style="display: none;">
+            <!-- 聊天头部 -->
+            <div class="chat-header">
+                <button id="backToListBtn" class="back-btn">← 返回列表</button>
+                <div class="room-info">
+                    <h3 id="currentRoomName">聊天室</h3>
+                    <span id="roomMemberCount">0 人</span>
+                </div>
+                <button id="leaveRoomBtn" class="leave-room-btn">离开房间</button>
+            </div>
+
+            <!-- 消息显示区域 -->
+            <div id="messagesContainer" class="messages-container">
+                <div class="welcome-message">
+                    <p>欢迎来到聊天室！开始聊天吧~</p>
+                </div>
+            </div>
+
+            <!-- 正在输入提示 -->
+            <div id="typingIndicator" class="typing-indicator" style="display: none;">
+                <span id="typingText"></span>
+            </div>
+
+            <!-- 消息输入区域 -->
+            <div class="input-container">
+                <input type="text" id="messageInput" placeholder="输入消息..." maxlength="500">
+                <button id="sendButton">发送</button>
+            </div>
+        </div>
+
+        <!-- 创建聊天室模态框 -->
+        <div id="createRoomModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2>创建聊天室</h2>
+                <form id="createRoomForm">
+                    <input type="text" id="roomName" placeholder="聊天室名称" required>
+                    <textarea id="roomDescription" placeholder="聊天室描述（可选）" rows="3"></textarea>
+                    <div class="form-actions">
+                        <button type="button" id="cancelCreateRoom">取消</button>
+                        <button type="submit">创建</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 头像设置弹窗 -->
+        <div id="avatarModal" class="modal" style="display: none;">
+            <div class="modal-content avatar-modal">
+                <div class="modal-header">
+                    <h3>设置头像</h3>
+                    <button id="closeAvatarModal" class="close-btn">×</button>
+                </div>
+                <div class="avatar-options">
+                    <div class="current-avatar">
+                        <h4>当前头像</h4>
+                        <img id="currentAvatarPreview" src="" alt="当前头像" class="avatar-preview">
+                    </div>
+                    <div class="avatar-styles">
+                        <h4>选择头像风格</h4>
+                        <div class="style-grid">
+                            <button class="style-btn" data-style="avataaars">Avataaars</button>
+                            <button class="style-btn" data-style="personas">Personas</button>
+                            <button class="style-btn" data-style="micah">Micah</button>
+                            <button class="style-btn" data-style="adventurer">Adventurer</button>
+                        </div>
+                    </div>
+                    <div class="avatar-colors">
+                        <h4>选择背景颜色</h4>
+                        <div class="color-grid">
+                            <button class="color-btn" data-color="4f46e5" style="background: #4f46e5;"></button>
+                            <button class="color-btn" data-color="7c3aed" style="background: #7c3aed;"></button>
+                            <button class="color-btn" data-color="dc2626" style="background: #dc2626;"></button>
+                            <button class="color-btn" data-color="ea580c" style="background: #ea580c;"></button>
+                            <button class="color-btn" data-color="16a34a" style="background: #16a34a;"></button>
+                            <button class="color-btn" data-color="0891b2" style="background: #0891b2;"></button>
+                            <button class="color-btn" data-color="be185d" style="background: #be185d;"></button>
+                            <button class="color-btn" data-color="9333ea" style="background: #9333ea;"></button>
+                        </div>
+                    </div>
+                    <div class="avatar-preview-section">
+                        <h4>预览</h4>
+                        <img id="newAvatarPreview" src="" alt="新头像预览" class="avatar-preview-large">
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button id="saveAvatarBtn" class="save-btn">保存头像</button>
+                    <button id="cancelAvatarBtn" class="cancel-btn">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
