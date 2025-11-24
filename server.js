@@ -4,6 +4,7 @@
  * 支持用户注册登录和多聊天室
  */
 
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -14,9 +15,21 @@ const { v4: uuidv4 } = require('uuid');
 // 导入数据库和认证模块
 const { initializeDatabase, User, Chatroom, Message } = require('./database');
 const { registerUser, loginUser, requireAuth, requireAuthSocket, verifySession } = require('./auth');
+const logger = require('./logger');
 
 const app = express();
 const server = http.createServer(app);
+
+// Session配置常量
+const SESSION_CONFIG = {
+    secret: process.env.SESSION_SECRET || 'chatroom-secret-key-2024',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { 
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000 // 24小时
+    }
+};
 
 // 日志工具函数
 function log(message) {
@@ -33,15 +46,7 @@ function log(message) {
 }
 
 // 配置会话中间件
-app.use(session({
-    secret: 'chatroom-secret-key-2024',
-    resave: false,
-    saveUninitialized: false,
-    cookie: { 
-        secure: false, // 在生产环境中应该设置为true（需要HTTPS）
-        maxAge: 24 * 60 * 60 * 1000 // 24小时
-    }
-}));
+app.use(session(SESSION_CONFIG));
 
 // 配置Socket.IO
 const io = socketIo(server, {
@@ -288,7 +293,7 @@ app.get('/api/chatrooms/:id/members', requireAuth, async (req, res) => {
 // io.use(requireAuthSocket);
 
 io.on('connection', async (socket) => {
-    log(`新连接: ${socket.id}`);
+    logger.info(`新连接: ${socket.id}`);
     
     // 暂时允许所有连接，但需要在前端传递用户信息
     // 在实际应用中，这里应该验证用户身份
@@ -312,11 +317,11 @@ io.on('connection', async (socket) => {
                 avatar: user.avatar
             };
             
-            log(`用户 ${socket.user.nickname} 认证成功: ${socket.id}`);
+            logger.info(`用户 ${socket.user.nickname} 认证成功: ${socket.id}`);
             onlineUsers.set(socket.id, socket.user);
             socket.emit('authenticated', { success: true });
         } catch (error) {
-            console.error('用户认证错误:', error);
+            logger.error('用户认证错误:', error);
             socket.emit('error', { message: '认证失败' });
         }
     });
@@ -331,7 +336,11 @@ io.on('connection', async (socket) => {
                 return;
             }
             
-            const { chatroomId } = data;
+            const chatroomId = parseInt(data.chatroomId);
+            if (isNaN(chatroomId)) {
+                socket.emit('error', { message: '无效的聊天室ID' });
+                return;
+            }
             const user = socket.user; // 从socket对象获取用户信息
             
             // 验证聊天室是否存在
@@ -355,7 +364,7 @@ io.on('connection', async (socket) => {
 
             // 获取聊天室历史消息
             const messages = await Message.getByChatroom(chatroomId, 50);
-            log(`发送历史消息给用户 ${user.nickname}，聊天室 ${chatroomId}，消息数量: ${messages.length}`);
+            logger.info(`发送历史消息给用户 ${user.nickname}，聊天室 ${chatroomId}，消息数量: ${messages.length}`);
             socket.emit('messageHistory', messages);
 
             // 获取聊天室成员列表
@@ -372,9 +381,9 @@ io.on('connection', async (socket) => {
                 message: `${user.nickname} 加入了聊天室`
             });
 
-            log(`${user.nickname} 加入了聊天室 ${chatroomId}`);
+            logger.info(`${user.nickname} 加入了聊天室 ${chatroomId}`);
         } catch (error) {
-            console.error('加入聊天室错误:', error);
+            logger.error('加入聊天室错误:', error);
             socket.emit('error', { message: '加入聊天室失败' });
         }
     });
@@ -389,8 +398,14 @@ io.on('connection', async (socket) => {
                 return;
             }
             
-            const { chatroomId, content } = data;
+            const chatroomId = parseInt(data.chatroomId);
+            const { content } = data;
             const user = socket.user; // 从socket对象获取用户信息
+            
+            if (isNaN(chatroomId)) {
+                socket.emit('error', { message: '无效的聊天室ID' });
+                return;
+            }
             
             if (!content || content.trim().length === 0) {
                 return;
@@ -417,9 +432,9 @@ io.on('connection', async (socket) => {
             // 广播消息给聊天室所有用户
             io.to(`room_${chatroomId}`).emit('message', messageData);
             
-            log(`[房间${chatroomId}] ${user.nickname}: ${content}`);
+            logger.info(`[房间${chatroomId}] ${user.nickname}: ${content}`);
         } catch (error) {
-            console.error('发送消息错误:', error);
+            logger.error('发送消息错误:', error);
             socket.emit('error', { message: '发送消息失败' });
         }
     });
@@ -479,7 +494,7 @@ io.on('connection', async (socket) => {
             message: `${user.nickname} 离开了聊天室`
         });
 
-        log(`${user.nickname} 离开了聊天室 ${chatroomId}`);
+        logger.info(`${user.nickname} 离开了聊天室 ${chatroomId}`);
     });
 
     /**
@@ -488,7 +503,7 @@ io.on('connection', async (socket) => {
     socket.on('disconnect', () => {
         const user = socket.user; // 从socket对象获取用户信息
         if (user) {
-            log(`用户 ${user.nickname} 断开连接: ${socket.id}`);
+            logger.info(`用户 ${user.nickname} 断开连接: ${socket.id}`);
             
             // 从所有聊天室中移除
             for (const [chatroomId, socketIds] of chatroomUsers.entries()) {
@@ -515,7 +530,7 @@ io.on('connection', async (socket) => {
                 }
             }
         } else {
-            log(`未认证用户断开连接: ${socket.id}`);
+            logger.info(`未认证用户断开连接: ${socket.id}`);
         }
 
         // 从在线用户中移除
@@ -530,14 +545,15 @@ async function startServer() {
     try {
         // 初始化数据库
         await initializeDatabase();
-        log('数据库初始化完成');
+        logger.info('数据库初始化完成');
 
         const PORT = process.env.PORT || 3000;
         server.listen(PORT, '0.0.0.0', () => {
-            log(`聊天室服务器运行在 http://0.0.0.0:${PORT}`);
+            logger.info(`聊天室服务器运行在 http://0.0.0.0:${PORT}`);
+            logger.info(`环境: ${process.env.NODE_ENV || 'development'}`);
         });
     } catch (error) {
-        console.error('服务器启动失败:', error);
+        logger.error('服务器启动失败:', error);
         process.exit(1);
     }
 }

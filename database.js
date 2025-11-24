@@ -3,15 +3,17 @@
  * 使用MySQL数据库
  */
 
+require('dotenv').config();
 const mysql = require('mysql2/promise');
+const logger = require('./logger');
 
 // 数据库配置
 const dbConfig = {
-    host: 'localhost',
-    port: 3306,
-    user: 'root',
-    password: '533533',
-    database: 'chatroom_db',
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT) || 3306,
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME || 'chatroom_db',
     charset: 'utf8mb4'
 };
 
@@ -19,7 +21,7 @@ const dbConfig = {
 const pool = mysql.createPool({
     ...dbConfig,
     waitForConnections: true,
-    connectionLimit: 10,
+    connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT) || 20,
     queueLimit: 0
 });
 
@@ -384,16 +386,22 @@ const Message = {
      * @returns {Promise<Array>} 消息列表
      */
     async getByChatroom(chatroomId, limit = 100) {
-        // 确保limit是数字，防止SQL注入
-        const safeLimit = parseInt(limit) || 100;
-        const [rows] = await pool.execute(`
+        // 确保chatroomId和limit都是数字，防止SQL注入
+        const safeChatroomId = parseInt(chatroomId, 10);
+        if (isNaN(safeChatroomId) || safeChatroomId <= 0) {
+            throw new Error('无效的聊天室ID');
+        }
+        const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
+        // 使用字符串模板拼接LIMIT，因为已经验证为安全整数
+        const query = `
             SELECT m.*, u.nickname, u.username, u.avatar
             FROM messages m
             JOIN users u ON m.user_id = u.id
             WHERE m.chatroom_id = ?
             ORDER BY m.created_at DESC
             LIMIT ${safeLimit}
-        `, [chatroomId]);
+        `;
+        const [rows] = await pool.execute(query, [safeChatroomId]);
         return rows.reverse(); // 按时间正序返回
     }
 };
