@@ -53,6 +53,14 @@ class ChatRoom {
         this.sendButton = document.getElementById('sendButton');
         this.typingIndicator = document.getElementById('typingIndicator');
         this.typingText = document.getElementById('typingText');
+        this.imageInput = document.getElementById('imageInput');
+        this.imageUploadBtn = document.getElementById('imageUploadBtn');
+        this.imagePreview = document.getElementById('imagePreview');
+        this.previewImage = document.getElementById('previewImage');
+        this.removePreviewBtn = document.getElementById('removePreviewBtn');
+        
+        // 当前待发送的图片URL
+        this.pendingImageUrl = null;
         
         // 创建聊天室模态框
         this.createRoomModal = document.getElementById('createRoomModal');
@@ -177,6 +185,32 @@ class ChatRoom {
         // 输入状态检测
         this.messageInput.addEventListener('input', () => {
             this.handleTyping();
+        });
+
+        // 粘贴图片事件（在输入框和聊天容器上监听）
+        this.messageInput.addEventListener('paste', (e) => {
+            this.handlePaste(e);
+        });
+
+        // 在整个聊天容器上也可以粘贴图片
+        this.chatContainer.addEventListener('paste', (e) => {
+            // 如果焦点不在输入框，则处理粘贴
+            if (document.activeElement !== this.messageInput) {
+                this.handlePaste(e);
+            }
+        });
+
+        // 图片上传相关事件
+        this.imageUploadBtn.addEventListener('click', () => {
+            this.imageInput.click();
+        });
+
+        this.imageInput.addEventListener('change', (e) => {
+            this.handleImageSelect(e);
+        });
+
+        this.removePreviewBtn.addEventListener('click', () => {
+            this.removeImagePreview();
         });
     }
 
@@ -719,6 +753,9 @@ class ChatRoom {
         try {
             console.log('加入聊天室:', room);
             
+            // 清除之前的输入状态
+            this.clearInput();
+            
             // 先加入聊天室
             const response = await fetch(`/api/chatrooms/${room.id}/join`, {
                 method: 'POST'
@@ -815,24 +852,184 @@ class ChatRoom {
      */
     sendMessage() {
         const message = this.messageInput.value.trim();
-        if (!message || !this.currentRoom) {
-            console.log('发送消息失败:', { message, currentRoom: this.currentRoom });
+        const imageUrl = this.pendingImageUrl;
+        
+        // 消息必须包含内容或图片
+        if ((!message && !imageUrl) || !this.currentRoom) {
+            console.log('发送消息失败:', { message, imageUrl, currentRoom: this.currentRoom });
             return;
         }
 
         console.log('发送消息:', { 
             chatroomId: this.currentRoom.id, 
             content: message,
+            imageUrl: imageUrl,
             socket: this.socket ? 'connected' : 'disconnected'
         });
 
         this.socket.emit('message', { 
             chatroomId: this.currentRoom.id, 
-            content: message 
+            content: message,
+            imageUrl: imageUrl
         });
+        
+        // 清空输入和预览
         this.messageInput.value = '';
+        this.removeImagePreview();
         
         // 停止输入状态
+        this.stopTyping();
+    }
+
+    /**
+     * 处理粘贴事件（从剪切板粘贴图片）
+     * @param {Event} e - 粘贴事件
+     */
+    async handlePaste(e) {
+        // 只在聊天界面显示时处理粘贴
+        if (!this.currentRoom || this.chatContainer.style.display === 'none') {
+            return;
+        }
+
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        // 查找图片类型的剪贴板项
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            
+            // 检查是否是图片类型
+            if (item.type.indexOf('image') !== -1) {
+                e.preventDefault(); // 阻止默认粘贴行为
+                
+                const file = item.getAsFile();
+                if (!file) continue;
+
+                // 检查文件大小（5MB）
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('图片大小不能超过 5MB');
+                    return;
+                }
+
+                // 显示预览
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    this.previewImage.src = e.target.result;
+                    this.imagePreview.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+
+                // 上传图片
+                try {
+                    const formData = new FormData();
+                    formData.append('image', file);
+
+                    // 显示上传提示（可选，如果已经有预览就不需要了）
+                    const response = await fetch('/api/upload/image', {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'include'
+                    });
+
+                    const result = await response.json();
+                    if (result.success) {
+                        this.pendingImageUrl = result.imageUrl;
+                        console.log('粘贴图片上传成功:', result.imageUrl);
+                        
+                        // 将焦点移回输入框，方便继续输入文字
+                        setTimeout(() => {
+                            this.messageInput.focus();
+                        }, 100);
+                    } else {
+                        alert('图片上传失败: ' + result.message);
+                        this.removeImagePreview();
+                    }
+                } catch (error) {
+                    console.error('粘贴图片上传错误:', error);
+                    alert('图片上传失败，请重试');
+                    this.removeImagePreview();
+                }
+                
+                return; // 只处理第一个图片
+            }
+        }
+    }
+
+    /**
+     * 处理图片选择
+     * @param {Event} e - 文件选择事件
+     */
+    async handleImageSelect(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // 检查文件大小（5MB）
+        if (file.size > 5 * 1024 * 1024) {
+            alert('图片大小不能超过 5MB');
+            this.imageInput.value = '';
+            return;
+        }
+
+        // 检查文件类型
+        if (!file.type.startsWith('image/')) {
+            alert('请选择图片文件');
+            this.imageInput.value = '';
+            return;
+        }
+
+        // 显示预览
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            this.previewImage.src = e.target.result;
+            this.imagePreview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+
+        // 上传图片
+        try {
+            const formData = new FormData();
+            formData.append('image', file);
+
+            const response = await fetch('/api/upload/image', {
+                method: 'POST',
+                body: formData,
+                credentials: 'include' // 包含 cookie
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                this.pendingImageUrl = result.imageUrl;
+                console.log('图片上传成功:', result.imageUrl);
+            } else {
+                alert('图片上传失败: ' + result.message);
+                this.removeImagePreview();
+            }
+        } catch (error) {
+            console.error('图片上传错误:', error);
+            alert('图片上传失败，请重试');
+            this.removeImagePreview();
+        }
+
+        // 清空文件输入，允许重复选择同一文件
+        this.imageInput.value = '';
+    }
+
+    /**
+     * 移除图片预览
+     */
+    removeImagePreview() {
+        this.imagePreview.style.display = 'none';
+        this.previewImage.src = '';
+        this.pendingImageUrl = null;
+        this.imageInput.value = '';
+    }
+
+    /**
+     * 清除输入状态（切换房间时调用）
+     */
+    clearInput() {
+        this.messageInput.value = '';
+        this.removeImagePreview();
         this.stopTyping();
     }
 
@@ -857,11 +1054,27 @@ class ChatRoom {
 
         // 根据消息长度判断样式
         const content = data.content || '';
+        const imageUrl = data.imageUrl || data.image_url || null;
+        const hasImage = !!imageUrl;
+        const hasText = content.trim().length > 0;
         const isLongMessage = content.length > 50 || content.includes('\n');
         const isShortMessage = content.length <= 20 && !content.includes(' ');
 
         // 获取用户头像
         const userAvatar = data.avatar || this.generateDefaultAvatar(data.nickname);
+        
+        // 构建消息内容HTML
+        let contentHtml = '';
+        if (hasImage) {
+            contentHtml += `<div class="message-image-container">
+                <img src="${imageUrl}" alt="图片" class="message-image" onclick="this.classList.toggle('expanded')">
+            </div>`;
+        }
+        if (hasText) {
+            contentHtml += `<div class="message-text" 
+                     data-long="${isLongMessage}" 
+                     data-short="${isShortMessage}">${this.escapeHtml(content)}</div>`;
+        }
         
         messageElement.innerHTML = `
             <div class="message-avatar">
@@ -872,9 +1085,7 @@ class ChatRoom {
                     <span class="message-nickname">${this.escapeHtml(data.nickname)}</span>
                     <span class="message-time">${data.timestamp || ''}</span>
                 </div>
-                <div class="message-content" 
-                     data-long="${isLongMessage}" 
-                     data-short="${isShortMessage}">${this.escapeHtml(content)}</div>
+                <div class="message-content">${contentHtml}</div>
             </div>
         `;
 

@@ -632,6 +632,50 @@ body {
     align-self: flex-start;
 }
 
+.message-image-container {
+    margin-bottom: 8px;
+}
+
+.message-image-container:last-child {
+    margin-bottom: 0;
+}
+
+.message-image {
+    max-width: 300px;
+    max-height: 300px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: block;
+}
+
+.message-image:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.message-image.expanded {
+    max-width: 80vw;
+    max-height: 80vh;
+    border-radius: 8px;
+}
+
+.message-text {
+    word-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.message-text[data-short="true"] {
+    padding: 0;
+}
+
+.message-text[data-long="true"] {
+    padding: 8px 0;
+}
+
 .message.own .message-content {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -641,6 +685,10 @@ body {
     width: fit-content;
     box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
     border: none;
+}
+
+.message.own .message-text {
+    color: white;
 }
 
 /* 短消息样式优化 - 紧凑显示 */
@@ -720,6 +768,70 @@ body {
     display: flex;
     gap: 10px;
     box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.1);
+    align-items: center;
+}
+
+.image-upload-btn {
+    padding: 12px 16px;
+    background: #f3f4f6;
+    color: #6b7280;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 48px;
+}
+
+.image-upload-btn:hover {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+    transform: scale(1.05);
+}
+
+.image-upload-btn:active {
+    transform: scale(0.95);
+}
+
+.image-preview {
+    padding: 10px 20px;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+    position: relative;
+}
+
+.image-preview img {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.remove-preview-btn {
+    position: absolute;
+    top: 15px;
+    right: 25px;
+    width: 28px;
+    height: 28px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.remove-preview-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+    transform: scale(1.1);
 }
 
 .input-container input {

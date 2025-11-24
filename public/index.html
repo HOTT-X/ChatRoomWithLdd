@@ -105,8 +105,15 @@
 
             <!-- 消息输入区域 -->
             <div class="input-container">
-                <input type="text" id="messageInput" placeholder="输入消息..." maxlength="500">
+                <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                <button id="imageUploadBtn" class="image-upload-btn" title="上传图片">📷</button>
+                <input type="text" id="messageInput" placeholder="输入消息或粘贴图片..." maxlength="500">
                 <button id="sendButton">发送</button>
+            </div>
+            <!-- 图片预览区域 -->
+            <div id="imagePreview" class="image-preview" style="display: none;">
+                <img id="previewImage" src="" alt="预览图片">
+                <button id="removePreviewBtn" class="remove-preview-btn">×</button>
             </div>
         </div>
 

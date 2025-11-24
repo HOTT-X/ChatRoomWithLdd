@@ -11,6 +11,8 @@ const socketIo = require('socket.io');
 const path = require('path');
 const session = require('express-session');
 const { v4: uuidv4 } = require('uuid');
+const multer = require('multer');
+const fs = require('fs');
 
 // 导入数据库和认证模块
 const { initializeDatabase, User, Chatroom, Message } = require('./database');
@@ -76,6 +78,46 @@ app.use(express.urlencoded({ extended: true }));
 
 // 静态文件服务
 app.use(express.static(path.join(__dirname, 'public')));
+// 图片上传目录的静态文件服务
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// 确保上传目录存在
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// 配置 multer 用于文件上传
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
+        // 生成唯一文件名：时间戳 + 随机字符串 + 原始扩展名
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, `image-${uniqueSuffix}${ext}`);
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 限制文件大小为 5MB
+    },
+    fileFilter: (req, file, cb) => {
+        // 只允许图片文件
+        const allowedTypes = /jpeg|jpg|png|gif|webp/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+        
+        if (extname && mimetype) {
+            return cb(null, true);
+        } else {
+            cb(new Error('只允许上传图片文件 (jpeg, jpg, png, gif, webp)'));
+        }
+    }
+});
 
 // 存储在线用户和聊天室
 const onlineUsers = new Map(); // socketId -> userInfo
@@ -229,6 +271,29 @@ app.put('/api/user/avatar', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('更新头像失败:', error);
         res.status(500).json({ success: false, message: '更新头像失败' });
+    }
+});
+
+// 上传图片接口
+app.post('/api/upload/image', requireAuth, upload.single('image'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: '请选择要上传的图片' });
+        }
+
+        // 返回图片URL
+        const imageUrl = `/uploads/${req.file.filename}`;
+        res.json({ 
+            success: true, 
+            imageUrl: imageUrl,
+            message: '图片上传成功' 
+        });
+    } catch (error) {
+        logger.error('图片上传失败:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: error.message || '图片上传失败' 
+        });
     }
 });
 
@@ -399,7 +464,7 @@ io.on('connection', async (socket) => {
             }
             
             const chatroomId = parseInt(data.chatroomId);
-            const { content } = data;
+            const { content, imageUrl } = data;
             const user = socket.user; // 从socket对象获取用户信息
             
             if (isNaN(chatroomId)) {
@@ -407,7 +472,8 @@ io.on('connection', async (socket) => {
                 return;
             }
             
-            if (!content || content.trim().length === 0) {
+            // 消息必须包含内容或图片
+            if ((!content || content.trim().length === 0) && !imageUrl) {
                 return;
             }
 
@@ -415,7 +481,8 @@ io.on('connection', async (socket) => {
             const message = await Message.create({
                 chatroom_id: chatroomId,
                 user_id: user.id,
-                content: content.trim()
+                content: content ? content.trim() : '',
+                image_url: imageUrl || null
             });
 
             const messageData = {
@@ -424,7 +491,8 @@ io.on('connection', async (socket) => {
                 nickname: user.nickname,
                 username: user.username,
                 avatar: user.avatar,
-                content: content.trim(),
+                content: content ? content.trim() : '',
+                imageUrl: imageUrl || null,
                 timestamp: new Date().toLocaleTimeString('zh-CN'),
                 chatroomId: chatroomId
             };

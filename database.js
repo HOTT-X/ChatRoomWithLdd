@@ -100,11 +100,25 @@ async function initializeDatabase() {
                 chatroom_id INT NOT NULL,
                 user_id INT NOT NULL,
                 content TEXT NOT NULL,
+                image_url VARCHAR(500) DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (chatroom_id) REFERENCES chatrooms(id) ON DELETE CASCADE,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         `);
+
+        // 如果表已存在，添加 image_url 字段（如果不存在）
+        try {
+            await pool.execute(`
+                ALTER TABLE messages 
+                ADD COLUMN image_url VARCHAR(500) DEFAULT NULL
+            `);
+        } catch (error) {
+            // 字段已存在，忽略错误
+            if (!error.message.includes('Duplicate column name')) {
+                logger.warn('添加 image_url 字段时出现警告:', error.message);
+            }
+        }
 
         console.log('数据库初始化完成');
     } catch (error) {
@@ -371,12 +385,12 @@ const Message = {
      * @returns {Promise<Object>} 保存的消息信息
      */
     async create(messageData) {
-        const { chatroom_id, user_id, content } = messageData;
+        const { chatroom_id, user_id, content, image_url } = messageData;
         const [result] = await pool.execute(
-            'INSERT INTO messages (chatroom_id, user_id, content) VALUES (?, ?, ?)',
-            [chatroom_id, user_id, content]
+            'INSERT INTO messages (chatroom_id, user_id, content, image_url) VALUES (?, ?, ?, ?)',
+            [chatroom_id, user_id, content || '', image_url || null]
         );
-        return { id: result.insertId, chatroom_id, user_id, content };
+        return { id: result.insertId, chatroom_id, user_id, content, image_url };
     },
 
     /**
