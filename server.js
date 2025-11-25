@@ -27,9 +27,12 @@ const SESSION_CONFIG = {
     secret: process.env.SESSION_SECRET || 'chatroom-secret-key-2024',
     resave: false,
     saveUninitialized: false,
+    rolling: true, // 每次请求时重置过期时间，用户活动时自动续期
     cookie: { 
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 24 * 60 * 60 * 1000 // 24小时
+        maxAge: 2 * 60 * 60 * 1000, // 2小时（用户活动时自动续期，最长保持2小时）
+        httpOnly: true, // 防止XSS攻击
+        sameSite: 'lax' // CSRF保护
     }
 };
 
@@ -62,12 +65,15 @@ const io = socketIo(server, {
 io.use((socket, next) => {
     // 使用现有的会话中间件
     session({
-        secret: 'chatroom-secret-key-2024',
+        secret: process.env.SESSION_SECRET || 'chatroom-secret-key-2024',
         resave: false,
         saveUninitialized: false,
+        rolling: true, // 每次请求时重置过期时间，用户活动时自动续期
         cookie: { 
             secure: false,
-            maxAge: 24 * 60 * 60 * 1000
+            maxAge: 2 * 60 * 60 * 1000, // 2小时（用户活动时自动续期，最长保持2小时）
+            httpOnly: true,
+            sameSite: 'lax'
         }
     })(socket.request, {}, next);
 });
